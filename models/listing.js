@@ -12,11 +12,8 @@ const listingSchema = new mongoose.Schema ({
         required: true,
     },
     image: {
-        type: String,
-        default: "https://images.unsplash.com/photo-1571896349842-33c89424de2d?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8N3x8aG90ZWxzfGVufDB8fDB8fHww&auto=format&fit=crop&w=800&q=60",
-        set: (v) => v === "" 
-        ? "https://images.unsplash.com/photo-1571896349842-33c89424de2d?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8N3x8aG90ZWxzfGVufDB8fDB8fHww&auto=format&fit=crop&w=800&q=60" 
-        : v,
+        url: String,
+        filename: String,
     },
     price:{
         type: Number,
@@ -36,12 +33,26 @@ const listingSchema = new mongoose.Schema ({
             ref: "review",
         },
     ],
-        
+    owner: {
+        type: Schema.Types.ObjectId,
+        ref: "user",
+    },
+    geometry: {
+        type: {
+            type: String,
+            enum: ["Point"],
+            required: true,
+        },
+        coordinates: {
+            type: [Number],
+            required: true,
+        }
+    }
 });
 
-listingSchema.post("findOneAndDelete", async(req,res) => {
+listingSchema.post("findOneAndDelete", async(listing) => {
     if(listing) {
-        await Review.deleteMany({_id: ( $in = listing.reviews ) });
+        await Review.deleteMany({_id: { $in: listing.reviews }});
     }
 });
 
