@@ -15,11 +15,16 @@ const passport = require("passport");
 const LocalStrategy = require("passport-local");
 const User = require("./models/users.js");
 const ExpressError = require("./utils/expressError.js");
-
+const cors = require("cors");
 
 const listingRouter = require("./routes/listing.js");
 const reviewRouter = require("./routes/review.js");
 const userRouter = require("./routes/user.js");
+
+// API Routers for React Frontend
+const apiListingRouter = require("./routes/api/listings.js");
+const apiReviewRouter = require("./routes/api/reviews.js");
+const apiAuthRouter = require("./routes/api/auth.js");
 
 //const mongoUrl = "mongodb://127.0.0.1:27017/wanderlust";
 const dbUrl = process.env.ATLASDB_URL;
@@ -29,15 +34,23 @@ main().then(() => {
 })
 .catch((err) => {
     console.log(err);
-})
+});
 async function main() {
     await mongoose.connect(dbUrl);
 };
 
-app.set("view engine","ejs");
-app.set("views",path.join(__dirname, "views"));
+// Enable CORS for React Vite Frontend
+app.use(cors({
+    origin: ["http://localhost:5173", "http://127.0.0.1:5173"],
+    credentials: true,
+}));
+
+app.use(express.json());
 app.use(express.urlencoded({extended: true}));
 app.use(methodOverride("_method"));
+
+app.set("view engine","ejs");
+app.set("views",path.join(__dirname, "views"));
 app.engine("ejs", ejsMate);
 app.use(express.static(path.join(__dirname,"/public")));
 
@@ -49,8 +62,8 @@ const store = MongoStore.create({
     touchAfter: 24 * 3600
 });
 
-store.on("error", () => {
-    console.log("ERROR in MONGO SESSION STORE",err);
+store.on("error", (err) => {
+    console.log("ERROR in MONGO SESSION STORE", err);
 });
 
 const sessionOptions = {
@@ -62,12 +75,9 @@ const sessionOptions = {
         expires: Date.now() + 7 * 24 * 60 * 60 * 1000,
         maxAge: 7 * 24 * 60 * 60 * 1000,
         httpOnly: true,
+        sameSite: "lax",
     },
 };
-
-//app.get("/" ,(req,res) => {
-//   res.send("app is working.");
-//});
 
 app.use(session(sessionOptions));
 app.use(flash());
@@ -85,28 +95,28 @@ app.use((req,res,next) => {
     next();
 });
 
-//app.get("/demouser", async(req,res) => {
-//    let fakeUser = new User({
-//        email:"student@gmai.com",
-//        username: "delta-student1",
-//    });
+// REST API routes for React
+app.use("/api/listings", apiListingRouter);
+app.use("/api/listings/:id/reviews", apiReviewRouter);
+app.use("/api/users", apiAuthRouter);
 
-//    let registeredUser = await User.register(fakeUser, "helloworld");
-//    res.send(registeredUser);
-//});
-
-
+// Existing EJS routes
 app.use("/listing", listingRouter);
 app.use("/listing/:id/reviews", reviewRouter);
 app.use("/", userRouter);
 
-
 app.all("/*splat",(req,res,next) => {
+    if (req.originalUrl && req.originalUrl.startsWith("/api")) {
+        return res.status(404).json({ success: false, error: "API endpoint not found" });
+    }
     next(new ExpressError(404, "Page Not Found!"));
 });
 
 app.use((err,req,res,next) => {
     let{statusCode = 500, message = "Something Went Wrong!"} = err;
+    if (req.originalUrl && req.originalUrl.startsWith("/api")) {
+        return res.status(statusCode).json({ success: false, error: message });
+    }
     res.status(statusCode).render("error.ejs",{message});
 });
 
